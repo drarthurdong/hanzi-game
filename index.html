@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>汉字乐园</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- 主页 -->
+<div id="home" class="screen active">
+  <div class="topbar">
+    <div class="coins">🪙 <span id="coinCount">0</span></div>
+    <button id="muteBtn" class="icon-btn" title="声音开关">🔊</button>
+  </div>
+  <h1 class="title">🏮 汉字乐园 🏮</h1>
+  <div class="mode-cards">
+    <button class="mode-card" data-mode="strokes">
+      <div class="mode-emoji">🖌️</div>
+      <div class="mode-name">学笔画</div>
+      <div class="mode-sub">写字的小秘密</div>
+    </button>
+    <button class="mode-card" data-mode="lesson">
+      <div class="mode-emoji">✏️</div>
+      <div class="mode-name">写生字</div>
+      <div class="mode-sub">课文里的字</div>
+    </button>
+    <button class="mode-card" data-mode="dictation">
+      <div class="mode-emoji">🎧</div>
+      <div class="mode-name">听写挑战</div>
+      <div class="mode-sub">听一听，写出来</div>
+    </button>
+  </div>
+  <div class="shelf">
+    <div class="shelf-title">我的奖励架</div>
+    <div id="stickerShelf" class="stickers"></div>
+  </div>
+  <div class="parent-note">给爸爸妈妈：每次玩 10 分钟左右即可，建议作为纸面写字前的"预热"。需要联网。</div>
+</div>
+
+<!-- 选课文 -->
+<div id="lessonPick" class="screen">
+  <div class="topbar">
+    <button class="icon-btn back-btn">⬅️</button>
+    <div class="coins">🪙 <span class="coinCountSub"></span></div>
+  </div>
+  <h2 class="subtitle">选一课来写</h2>
+  <div id="lessonList" class="lesson-list"></div>
+</div>
+
+<!-- 练习 -->
+<div id="practice" class="screen">
+  <div class="topbar">
+    <button class="icon-btn back-btn">⬅️</button>
+    <div id="progressDots" class="dots"></div>
+    <div class="coins">🪙 <span class="coinCountSub"></span></div>
+  </div>
+  <div id="charInfo" class="char-info"></div>
+  <div id="ruleBanner" class="rule-banner hidden"></div>
+  <div id="writerWrap" class="writer-wrap">
+    <div id="gridBox" class="grid-box"></div>
+  </div>
+  <div id="feedback" class="feedback">&nbsp;</div>
+  <div class="controls">
+    <button id="replayBtn" class="ctrl-btn">🔁 再看一遍</button>
+    <button id="hintBtn" class="ctrl-btn">💡 提示</button>
+    <button id="speakBtn" class="ctrl-btn">🔈 再听一遍</button>
+  </div>
+</div>
+
+<!-- 完成一个字的庆祝层 -->
+<div id="celebrate" class="overlay hidden">
+  <div class="celebrate-card">
+    <div id="celebrateStars" class="big-stars"></div>
+    <div id="celebrateChar" class="big-char"></div>
+    <div id="celebrateWord" class="big-word"></div>
+    <div id="celebrateCoins" class="coin-gain"></div>
+    <button id="nextBtn" class="big-btn">下一个 ➡️</button>
+  </div>
+</div>
+
+<!-- 全部完成层 -->
+<div id="finish" class="overlay hidden">
+  <div class="celebrate-card">
+    <div class="mode-emoji">🎉</div>
+    <div id="finishMsg" class="finish-msg"></div>
+    <div id="finishSticker" class="finish-sticker"></div>
+    <button id="finishBtn" class="big-btn">回家 🏠</button>
+  </div>
+</div>
+
+<div id="loadError" class="overlay hidden">
+  <div class="celebrate-card">
+    <div class="mode-emoji">📡</div>
+    <div class="finish-msg">加载笔画数据失败，请检查网络后刷新页面。</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3/dist/hanzi-writer.min.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
