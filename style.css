@@ -96,6 +96,7 @@ html, body {
 .big-stars { font-size: 40px; letter-spacing: 4px; }
 .big-char { font-size: 88px; font-weight: 700; color: #c0392b; line-height: 1.2; }
 .big-word { font-size: 26px; color: #4a3728; margin-bottom: 6px; }
+.mnemonic { font-size: 16px; color: #a08468; margin-bottom: 6px; min-height: 20px; }
 .coin-gain { font-size: 24px; font-weight: 800; color: #e8a02c; min-height: 32px; }
 .big-btn {
   margin-top: 14px; font-size: 24px; font-weight: 800; color: #fff;
