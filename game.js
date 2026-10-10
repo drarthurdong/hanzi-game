@@ -1,6 +1,8 @@
-/* 汉字乐园 v2 — 笔顺练习游戏
+/* 汉字乐园 v3 — 笔顺练习游戏
  * 引擎：Hanzi Writer (MIT)。字表与《中国语文》一册课文同步维护。
  * v2：写字秘诀多例练习；写错笔时按笔顺规则语音讲解；字形记忆口诀（听写提示）。
+ * v3：选择页鸟瞰（每课/每条秘诀列出所有字）；点任意字单独练习；
+ *     掌握度追踪（3 次无错误无提示通过 = 掌握），未掌握的字高亮。
  */
 
 // ---------- 数据 ----------
@@ -24,6 +26,8 @@ const LESSONS = [
   { id: 8,  title: '第8课 大西瓜', emoji: '🍉', chars: [['瓜','西瓜'],['又','又大又圆'],['你','你好'],['吃','吃饭'],['留','留下'],['变','变成']] },
   { id: 9,  title: '第9课',        emoji: '🌸', chars: [['花','花朵'],['破','破了'],['坐','坐下'],['在','在家'],['地','地上'],['哭','哭了'],['补','补衣服']] },
   { id: 10, title: '第10课 中秋节', emoji: '🥮', chars: [['节','中秋节'],['蓝','蓝色'],['明','明天'],['孩','孩子'],['脸','笑脸'],['甜','甜甜的']] },
+  { id: 'w1', title: '新词 ①', emoji: '📖', chars: [['中','中文'],['文','中文'],['名','一名'],['学','学生'],['生','学生'],['日','节日'],['朋','朋友'],['友','朋友']] },
+  { id: 'w2', title: '新词 ②', emoji: '📒', chars: [['多','多少'],['少','多少'],['下','留下'],['大','大地'],['球','皮球']] },
 ];
 
 // 字形记忆口诀（听写提示 + 演示时讲解）。逐步补充。
@@ -50,6 +54,14 @@ const MNEMONICS = {
   '破': '石字旁，石头把东西打破了',
   '姥': '女字旁，姥姥是女的',
   '有': '下面藏着一个月字',
+  '名': '夕加口——天黑了看不清，要用嘴巴叫名字',
+  '朋': '两个月字肩并肩，好朋友肩并肩',
+  '学': '上面像小屋顶，下面是子，孩子在屋里学习',
+  '生': '小苗从土里长出来',
+  '多': '两个夕阳叠在一起，日子多多',
+  '中': '一个口，一竖穿过正中间',
+  '大': '一个人张开手脚，大大的',
+  '日': '圆圆的太阳，中间一横是阳光',
 };
 
 // 特定字特定笔画的手写提示（优先于自动提示）。key = 字，value = {笔画序号: 提示}
@@ -74,7 +86,8 @@ const store = {
   },
   save(s) { localStorage.setItem('hanziGameV1', JSON.stringify(s)); },
 };
-let state = Object.assign({ coins: 0, stars: {}, muted: false }, store.load());
+let state = Object.assign({ coins: 0, stars: {}, mastery: {}, muted: false }, store.load());
+if (!state.mastery) state.mastery = {};
 
 let mode = null;          // 'strokes' | 'lesson' | 'dictation'
 let queue = [];           // [{c, word, rule?, say?}]
@@ -86,6 +99,12 @@ let currentLesson = null;
 let sessionCoins = 0;
 let dictHints = 0;
 let lastSpokenHintAt = 0;
+let hintUsedThisItem = false; // 本字是否用过提示（影响"掌握"判定）
+let returnTo = null;          // 'picker' = 单字练习后回选择页
+let lastPicker = null;        // {title, items, onPick} 便于返回重绘
+
+const MASTERY_NEED = 3;       // 连续干净通过次数 = 掌握
+const isMastered = (c) => (state.mastery[c] || 0) >= MASTERY_NEED;
 
 const charDataCache = {};
 
@@ -265,6 +284,7 @@ function startItem() {
   strokesDone = 0;
   wrongOnStroke = 0;
   dictHints = 0;
+  hintUsedThisItem = false;
   renderDots();
   showFeedback('\u00a0', false, 0);
 
@@ -360,6 +380,10 @@ function finishItem(totalMistakes) {
   state.coins += bonus;
   sessionCoins += bonus;
   state.stars[item.c] = Math.max(state.stars[item.c] || 0, earned);
+  // 掌握度：无错误且未用提示 = 一次"干净通过"
+  if (totalMistakes === 0 && !hintUsedThisItem) {
+    state.mastery[item.c] = Math.min((state.mastery[item.c] || 0) + 1, 9);
+  }
   store.save(state);
   syncCoins();
   sfx.win();
@@ -380,6 +404,10 @@ function nextItem() {
   qi++;
   if (qi < queue.length) {
     startItem();
+  } else if (returnTo === 'picker' && lastPicker) {
+    // 单字练习完成：直接回到选择页（可见更新后的掌握度）
+    if (writer) { try { writer.cancelQuiz(); } catch {} writer = null; }
+    renderPicker(lastPicker.title, lastPicker.items, lastPicker.onPick);
   } else {
     endSession();
   }
@@ -404,31 +432,71 @@ function endSession() {
 
 // ---------- 选择页（课文 / 写字秘诀 通用）----------
 
-function starsLabel(chars) {
+function masteryLabel(chars) {
   let got = 0;
-  for (const [c] of chars) if ((state.stars[c] || 0) >= 2) got++;
-  return `${got}/${chars.length} ⭐`;
+  for (const [c] of chars) if (isMastered(c)) got++;
+  return `${got}/${chars.length} 🏅`;
+}
+
+// 字片（鸟瞰 + 可点跳转）。三种状态：
+// mastered = 已掌握（金色）；needs = 练过但未掌握（高亮，优先练）；fresh = 还没练过（中性）
+function makeChip(it, idx, onPickSingle) {
+  const [c] = it.chars[idx];
+  const n = state.mastery[c] || 0;
+  const attempted = n > 0 || (state.stars[c] || 0) > 0;
+  const chip = document.createElement('button');
+  chip.className = 'chip ' + (isMastered(c) ? 'mastered' : attempted ? 'needs' : 'fresh');
+  const dots = isMastered(c) ? '⭐' : '●'.repeat(Math.min(n, MASTERY_NEED)) + '○'.repeat(Math.max(0, MASTERY_NEED - n));
+  chip.innerHTML = `<span class="chip-char">${c}</span><span class="chip-dots">${dots}</span>`;
+  chip.addEventListener('click', (e) => { e.stopPropagation(); ensureAudio(); onPickSingle(it, idx); });
+  return chip;
 }
 
 function renderPicker(title, items, onPick) {
+  lastPicker = { title, items, onPick };
   $('pickTitle').textContent = title;
   const wrap = $('lessonList');
   wrap.innerHTML = '';
   items.forEach(it => {
-    const b = document.createElement('button');
-    b.className = 'lesson-btn';
-    b.innerHTML = `<span class="lesson-emoji">${it.emoji}</span><span>${it.title || it.rule}</span><span class="lesson-stars">${starsLabel(it.chars)}</span>`;
-    b.addEventListener('click', () => { ensureAudio(); onPick(it); });
-    wrap.appendChild(b);
+    const card = document.createElement('div');
+    card.className = 'lesson-card';
+    const head = document.createElement('button');
+    head.className = 'lesson-btn';
+    head.innerHTML = `<span class="lesson-emoji">${it.emoji}</span><span>${it.title || it.rule}</span><span class="lesson-stars">${masteryLabel(it.chars)}</span>`;
+    head.addEventListener('click', () => { ensureAudio(); returnTo = null; onPick(it); });
+    card.appendChild(head);
+    const row = document.createElement('div');
+    row.className = 'chip-row';
+    it.chars.forEach((_, idx) => row.appendChild(makeChip(it, idx, startSingle)));
+    card.appendChild(row);
+    wrap.appendChild(card);
   });
   syncCoins();
   show('lessonPick');
+}
+
+// 单字练习：点字片直达，练完回选择页
+function startSingle(it, idx) {
+  const [c, word] = it.chars[idx];
+  if (it.rule) {
+    mode = 'strokes';
+    queue = [{ c, word, rule: it.rule, say: it.say }];
+  } else {
+    mode = 'lesson';
+    queue = [{ c, word }];
+  }
+  currentLesson = null;
+  returnTo = 'picker';
+  qi = 0; sessionCoins = 0;
+  show('practice');
+  startItem();
 }
 
 // ---------- 模式入口 ----------
 
 function startRule(ruleObj) {
   mode = 'strokes';
+  returnTo = null;
   currentLesson = null;
   queue = ruleObj.chars.map(([c, word]) => ({ c, word, rule: ruleObj.rule, say: `${ruleObj.say}` }));
   qi = 0; sessionCoins = 0;
@@ -438,6 +506,7 @@ function startRule(ruleObj) {
 
 function startLesson(lesson) {
   mode = 'lesson';
+  returnTo = null;
   currentLesson = lesson;
   queue = lesson.chars.map(([c, word]) => ({ c, word }));
   qi = 0; sessionCoins = 0;
@@ -456,6 +525,7 @@ function startDictation() {
     return;
   }
   mode = 'dictation';
+  returnTo = null;
   currentLesson = null;
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -485,11 +555,23 @@ function renderShelf() {
 function goHome() {
   if (writer) { try { writer.cancelQuiz(); } catch {} writer = null; }
   speechSynthesis && speechSynthesis.cancel();
+  returnTo = null;
   $('celebrate').classList.add('hidden');
   $('finish').classList.add('hidden');
   renderShelf();
   syncCoins();
   show('home');
+}
+
+// 练习页返回：单字练习回选择页，整课练习回主页
+function backFromPractice() {
+  if (returnTo === 'picker' && lastPicker) {
+    if (writer) { try { writer.cancelQuiz(); } catch {} writer = null; }
+    speechSynthesis && speechSynthesis.cancel();
+    renderPicker(lastPicker.title, lastPicker.items, lastPicker.onPick);
+  } else {
+    goHome();
+  }
 }
 
 // ---------- 事件绑定 ----------
@@ -504,7 +586,8 @@ document.querySelectorAll('.mode-card').forEach(card => {
   });
 });
 
-document.querySelectorAll('.back-btn').forEach(b => b.addEventListener('click', goHome));
+document.querySelector('#lessonPick .back-btn').addEventListener('click', goHome);
+document.querySelector('#practice .back-btn').addEventListener('click', backFromPractice);
 $('nextBtn').addEventListener('click', () => { ensureAudio(); nextItem(); });
 $('finishBtn').addEventListener('click', goHome);
 
@@ -521,6 +604,7 @@ $('replayBtn').addEventListener('click', () => {
 $('hintBtn').addEventListener('click', () => {
   if (!writer) return;
   ensureAudio();
+  hintUsedThisItem = true;
   const item = queue[qi];
   if (mode === 'dictation') {
     // 提示阶梯：1) 口诀 2) 显示轮廓 3) 闪现下一笔
@@ -563,7 +647,7 @@ document.querySelector('.title').addEventListener('click', () => {
   if (titleTaps.length >= 3) {
     titleTaps = [];
     if (confirm('清空所有金币和星星，重新开始？')) {
-      state = { coins: 0, stars: {}, muted: state.muted };
+      state = { coins: 0, stars: {}, mastery: {}, muted: state.muted };
       store.save(state);
       syncCoins();
       renderShelf();

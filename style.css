@@ -44,14 +44,35 @@ html, body {
 .parent-note { margin-top: auto; padding-top: 18px; font-size: 12px; color: #b39a80; text-align: center; }
 
 .lesson-list { display: flex; flex-direction: column; gap: 14px; }
+.lesson-card {
+  background: #fff; border-radius: 20px; padding: 6px 10px 12px;
+  box-shadow: 0 3px 10px rgba(160,90,30,.15);
+}
 .lesson-btn {
-  display: flex; align-items: center; gap: 14px; background: #fff; border: none;
-  border-radius: 20px; padding: 14px 18px; font-size: 22px; font-weight: 700;
-  box-shadow: 0 3px 10px rgba(160,90,30,.15); cursor: pointer; text-align: left;
+  display: flex; align-items: center; gap: 14px; background: transparent; border: none;
+  border-radius: 16px; padding: 10px 8px; font-size: 22px; font-weight: 700;
+  cursor: pointer; text-align: left; width: 100%;
 }
 .lesson-btn:active { transform: scale(.97); }
 .lesson-emoji { font-size: 34px; }
-.lesson-stars { margin-left: auto; font-size: 15px; color: #e8a02c; }
+.lesson-stars { margin-left: auto; font-size: 15px; color: #e8a02c; white-space: nowrap; }
+
+/* 鸟瞰字片 */
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 8px; }
+.chip {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  width: 54px; height: 60px; border-radius: 14px; cursor: pointer;
+  border: 2px solid transparent; background: #faf4ec; padding: 2px 0;
+}
+.chip:active { transform: scale(.92); }
+.chip-char { font-size: 26px; font-weight: 700; color: #4a3728; line-height: 1.2; }
+.chip-dots { font-size: 9px; letter-spacing: 1px; color: #c9b8a4; }
+.chip.fresh { background: #faf4ec; }
+.chip.needs { background: #fff3e0; border-color: #f0a05a; }
+.chip.needs .chip-dots { color: #e8872c; }
+.chip.mastered { background: #fff8d9; border-color: #f2c94c; }
+.chip.mastered .chip-char { color: #b8860b; }
+.chip.mastered .chip-dots { font-size: 12px; }
 
 .char-info { text-align: center; font-size: 26px; font-weight: 700; min-height: 36px; }
 .rule-banner {
