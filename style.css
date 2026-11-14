@@ -66,6 +66,10 @@ html, body {
 }
 .chip:active { transform: scale(.92); }
 .chip-char { font-size: 26px; font-weight: 700; color: #4a3728; line-height: 1.2; }
+.chip-svg { width: 32px; height: 32px; display: block; }
+.chip.word { width: auto; min-width: 70px; padding: 2px 10px; }
+.chip.word .chip-char { font-size: 21px; letter-spacing: 2px; }
+.word-card .lesson-btn { background: #eef4fb; }
 .chip-dots { font-size: 9px; letter-spacing: 1px; color: #c9b8a4; }
 .chip.fresh { background: #faf4ec; }
 .chip.needs { background: #fff3e0; border-color: #f0a05a; }

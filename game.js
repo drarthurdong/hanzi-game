@@ -43,6 +43,21 @@ const LESSONS = [
   { id: 19, title: '第19课 小公鸡做习题', emoji: '🐓', chars: [['公','公鸡'],['做','做习题'],['习','习题'],['十','十米'],['米','一粒米'],['因','因为'],['为','因为'],['粒','一粒米']] },
 ];
 
+// 词语表（教材 p116-117；= 词语本抄写与家默的出题来源）。按教材分组，插在对应课后面。
+const WORD_GROUPS = [
+  { id: 'w1', after: 10, emoji: '📝', title: '写词语 · 第1—10课',
+    words: ['中文','老师','朋友','同学','学生','留下','补课','皮球','上课','七上八下','大小','多少','姥姥','手指','两个','地瓜','笑脸','节电','小孩','变脸'] },
+  { id: 'w2', after: 14, emoji: '📝', title: '写词语 · 第11—14课',
+    words: ['节拍','大调','许多','小鸟','开会','鸭子','河水','去路','把手','发生'] },
+  { id: 'w3', after: 17, emoji: '📝', title: '写词语 · 第15—17课',
+    words: ['我们','兔子','生日','舌头','心跳','来往','成人','儿子','排球','蓝天'] },
+  { id: 'w4', after: 19, emoji: '📝', title: '写词语 · 第18—19课',
+    words: ['黑白','鸟蛋','公鸡','米粒','因为','学习'] },
+];
+
+// 只认不写（D-006 选择性跳过）：词语里遇到时演示代替书写
+const WATCH_ONLY = new Set(['黑']);
+
 // 字形记忆口诀（听写提示 + 演示时讲解）。逐步补充。
 const MNEMONICS = {
   '明': '日加月，太阳和月亮在一起，天就亮啦',
@@ -72,13 +87,13 @@ const MNEMONICS = {
   '学': '上面像小屋顶，下面是子，孩子在屋里学习',
   '生': '小苗从土里长出来',
   '多': '两个夕阳叠在一起，日子多多',
-  '中': '一个口，一竖穿过正中间',
+  '中': '口里中间插根糖，就是中',
   '大': '一个人张开手脚，大大的',
   '日': '圆圆的太阳，中间一横是阳光',
   '是': '上面一个日，下面像迈开的脚步',
   '的': '白加勺，白色的小勺子',
   '同': '大门框里一横一个口',
-  '口': '像张开的嘴巴',
+  '口': '圆圆的大嘴巴',
   '儿': '像小孩迈开两条腿',
   '四': '大口框里藏着两条小腿',
   '记': '言字旁，用话把事情记下来',
@@ -89,10 +104,10 @@ const MNEMONICS = {
   '游': '三点水，在水里游来游去',
   '飞': '像小鸟张开一只翅膀飞上天',
   '鸟': '小鸟侧着身，一点是眼睛',
-  '虫': '口下一条身体，一点是小尾巴',
+  '虫': '口字下面长出脚，一点是小尾巴',
   '洞': '三点水加同，水冲出来的洞',
   '进': '井加走之底，走着走着就进去了',
-  '鸭': '甲加鸟，鸭子也是鸟',
+  '鸭': '甲加鸟，是个大鸟——甲就是大',
   '河': '三点水加可，有水才是河',
   '路': '足字旁，路是用脚走出来的',
   '兔': '像蹲着的小兔子，一点是短尾巴',
@@ -108,7 +123,7 @@ const MNEMONICS = {
   '往': '双人旁加主，去往别人家',
   '排': '提手旁加非，用手排好队',
   '成': '斜钩像大旗立起来，事情做成了',
-  '人': '一撇一捺，两条腿站稳的人',
+  '人': '人有两条腿，左边一条，右边支在中间，才站得住',
   '白': '白天有个太阳——日字加一撇就是白',
   '鸡': '这又是一只鸟，哈哈——又加鸟就是鸡',
   '黑': '下面四点像火苗，被火熏黑了',
@@ -257,6 +272,8 @@ const store = {
 };
 let state = Object.assign({ coins: 0, stars: {}, mastery: {}, muted: false }, store.load());
 if (!state.mastery) state.mastery = {};
+if (!state.wmastery) state.wmastery = {};  // 词语掌握度
+if (!state.wstars) state.wstars = {};      // 词语星星
 
 let mode = null;          // 'strokes' | 'lesson' | 'dictation'
 let queue = [];           // [{c, word, rule?, say?}]
@@ -276,6 +293,19 @@ const MASTERY_NEED = 3;       // 连续干净通过次数 = 掌握
 const isMastered = (c) => (state.mastery[c] || 0) >= MASTERY_NEED;
 
 const charDataCache = {};
+const charDataPending = {};
+
+// 共享的笔画数据加载（练习页与鸟瞰字片共用缓存）
+function fetchCharData(char) {
+  if (charDataCache[char]) return Promise.resolve(charDataCache[char]);
+  if (!charDataPending[char]) {
+    charDataPending[char] = fetch(`https://cdn.jsdelivr.net/npm/hanzi-writer-data@2/${char}.json`)
+      .then(r => r.json())
+      .then(data => { charDataCache[char] = data; return data; })
+      .catch(err => { delete charDataPending[char]; throw err; });
+  }
+  return charDataPending[char];
+}
 
 // ---------- 小工具 ----------
 
@@ -461,8 +491,12 @@ function startItem() {
   renderDots();
   showFeedback('\u00a0', false, 0);
 
+  if (item.wseq && item.wseq.i === 0) wordRun = { w: item.wseq.w, mistakes: 0, hints: false };
+
   if (mode === 'dictation') {
-    $('charInfo').textContent = '🎧 听一听，写出来！';
+    $('charInfo').textContent = item.wseq ? `🎧 词语 · 第${item.wseq.i + 1}个字` : '🎧 听一听，写出来！';
+  } else if (item.wseq) {
+    $('charInfo').textContent = `${item.wseq.w} · 第${item.wseq.i + 1}个字：${item.c}`;
   } else {
     $('charInfo').textContent = item.word ? `${item.c} · ${item.word}` : item.c;
   }
@@ -496,10 +530,8 @@ function startItem() {
     highlightColor: '#58b368',
     radicalColor: '#d8432a',   // 关键部件红色（经 radStrokes 注入，见 loader）
     charDataLoader: (char, onComplete) => {
-      fetch(`https://cdn.jsdelivr.net/npm/hanzi-writer-data@2/${char}.json`)
-        .then(r => r.json())
+      fetchCharData(char)
         .then(data => {
-          charDataCache[char] = data;
           // 用我们的关键部件替换字典部首：红色 = 可迁移的积木块
           const ki = keyStrokeIndices(char);
           if (ki) data.radStrokes = ki; else delete data.radStrokes;
@@ -510,10 +542,20 @@ function startItem() {
   });
 
   if (mode === 'dictation') {
-    speak(`请写：${item.c}。${item.word}的${item.c}。`);
+    if (item.wseq) speak(item.wseq.i === 0 ? `请写词语：${item.wseq.w}。先写第一个字。` : `接着写${item.wseq.w}的第${item.wseq.i + 1}个字。`);
+    else speak(`请写：${item.c}。${item.word}的${item.c}。`);
     beginQuiz(4);
+  } else if (item.watch || (!item.rule && WATCH_ONLY.has(item.c))) {
+    // 只认不写的字：无论从词语、整课还是单字片进入，都只演示
+    watchAndAdvance(item);
   } else {
     let intro = item.say || `${item.c}，${item.word}的${item.c}。`;
+    if (item.wseq) {
+      intro = item.wseq.i === 0
+        ? `我们来写词语：${item.wseq.w}！先写${item.c}。`
+        : `${wordNextPrefix}接着写${item.wseq.w}的${item.c}。`;
+      wordNextPrefix = '';
+    }
     if (!item.rule && MNEMONICS[item.c]) intro += `${MNEMONICS[item.c]}。`;
     // 部件结构：把字介绍成积木
     const cp = compParts(item.c);
@@ -576,10 +618,51 @@ function finishItem(totalMistakes) {
   state.coins += bonus;
   sessionCoins += bonus;
   state.stars[item.c] = Math.max(state.stars[item.c] || 0, earned);
-  // 掌握度：无错误且未用提示 = 一次"干净通过"
+  // 掌握度：无错误且未用提示 = 一次"干净通过"（词语中的字同样累计——复习效应）
   if (totalMistakes === 0 && !hintUsedThisItem) {
     state.mastery[item.c] = Math.min((state.mastery[item.c] || 0) + 1, 9);
   }
+
+  // 词语模式：累计整词成绩
+  if (item.wseq && wordRun) {
+    wordRun.mistakes += totalMistakes;
+    wordRun.hints = wordRun.hints || hintUsedThisItem;
+    const last = item.wseq.i === item.wseq.n - 1;
+    if (!last) {
+      // 词语中间的字：不打断，直接写下一个（夸奖并入下一字开场白）
+      store.save(state);
+      syncCoins();
+      sfx.good();
+      wordNextPrefix = `${item.c}写好啦！`;
+      qi++;
+      startItem();
+      return;
+    }
+    // 整词完成：词语级的星星/掌握度 + 整词庆祝
+    const w = item.wseq.w;
+    const wEarned = starsFor(wordRun.mistakes);
+    state.wstars[w] = Math.max(state.wstars[w] || 0, wEarned);
+    if (wordRun.mistakes === 0 && !wordRun.hints) {
+      state.wmastery[w] = Math.min((state.wmastery[w] || 0) + 1, 9);
+    }
+    const wBonus = (wordRun.mistakes === 0 ? 8 : wordRun.mistakes <= 2 ? 5 : 2) * (isDict ? 2 : 1);
+    state.coins += wBonus;
+    sessionCoins += wBonus;
+    store.save(state);
+    syncCoins();
+    sfx.win();
+    const praiseW = PRAISE[Math.floor(Math.random() * PRAISE.length)];
+    speak(`${praiseW}词语${w}写好啦！${[...w].join('，加')}，就是${w}！`);
+    $('celebrateStars').textContent = '⭐'.repeat(wEarned) + '☆'.repeat(3 - wEarned);
+    $('celebrateChar').textContent = w;
+    $('celebrateWord').textContent = '词语写好啦！';
+    $('celebrateMnemonic').textContent = `🧩 ${[...w].join(' ＋ ')} ＝ ${w}`;
+    $('celebrateCoins').textContent = `+${wBonus} 🪙 奖励！`;
+    $('celebrate').classList.remove('hidden');
+    wordRun = null;
+    return;
+  }
+
   store.save(state);
   syncCoins();
   sfx.win();
@@ -617,7 +700,7 @@ function endSession() {
   let msg = `全部完成！这次得到 ${sessionCoins} 🪙`;
   stickerEl.textContent = '';
   if (mode === 'lesson' && currentLesson) {
-    const allDone = currentLesson.chars.every(([c]) => (state.stars[c] || 0) >= 2);
+    const allDone = currentLesson.chars.every(([c]) => WATCH_ONLY.has(c) || (state.stars[c] || 0) >= 2);
     if (allDone) {
       stickerEl.textContent = currentLesson.emoji;
       msg = `${currentLesson.title} 全部过关！获得贴纸！`;
@@ -632,9 +715,33 @@ function endSession() {
 // ---------- 选择页（课文 / 写字秘诀 通用）----------
 
 function masteryLabel(chars) {
+  const writable = chars.filter(([c]) => !WATCH_ONLY.has(c));
   let got = 0;
-  for (const [c] of chars) if (isMastered(c)) got++;
-  return `${got}/${chars.length} 🏅`;
+  for (const [c] of writable) if (isMastered(c)) got++;
+  return `${got}/${writable.length} 🏅`;
+}
+
+// 鸟瞰字片上的迷你字形：黑色笔画 + 红色关键部件（与练习页同一套部件表）
+function renderMiniChar(el, char) {
+  fetchCharData(char).then(data => {
+    const ki = keyStrokeIndices(char);
+    const keySet = new Set(ki || []);
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 1024 1024');
+    svg.setAttribute('class', 'chip-svg');
+    const g = document.createElementNS(ns, 'g');
+    g.setAttribute('transform', 'scale(1, -1) translate(0, -900)');
+    data.strokes.forEach((d, i) => {
+      const p = document.createElementNS(ns, 'path');
+      p.setAttribute('d', d);
+      p.setAttribute('fill', keySet.has(i) ? '#d8432a' : '#333333');
+      g.appendChild(p);
+    });
+    svg.appendChild(g);
+    el.textContent = '';
+    el.appendChild(svg);
+  }).catch(() => {}); // 加载失败就保留文字
 }
 
 // 字片（鸟瞰 + 可点跳转）。三种状态：
@@ -644,10 +751,30 @@ function makeChip(it, idx, onPickSingle) {
   const n = state.mastery[c] || 0;
   const attempted = n > 0 || (state.stars[c] || 0) > 0;
   const chip = document.createElement('button');
-  chip.className = 'chip ' + (isMastered(c) ? 'mastered' : attempted ? 'needs' : 'fresh');
-  const dots = isMastered(c) ? '⭐' : '●'.repeat(Math.min(n, MASTERY_NEED)) + '○'.repeat(Math.max(0, MASTERY_NEED - n));
+  const watch = WATCH_ONLY.has(c);
+  chip.className = 'chip ' + (watch ? 'fresh' : isMastered(c) ? 'mastered' : attempted ? 'needs' : 'fresh');
+  const dots = watch ? '👀' : isMastered(c) ? '⭐' : '●'.repeat(Math.min(n, MASTERY_NEED)) + '○'.repeat(Math.max(0, MASTERY_NEED - n));
   chip.innerHTML = `<span class="chip-char">${c}</span><span class="chip-dots">${dots}</span>`;
+  renderMiniChar(chip.querySelector('.chip-char'), c);
   chip.addEventListener('click', (e) => { e.stopPropagation(); ensureAudio(); onPickSingle(it, idx); });
+  return chip;
+}
+
+// 词语片（写词语组）
+const isWordMastered = (w) => (state.wmastery[w] || 0) >= MASTERY_NEED;
+function wordMasteryLabel(words) {
+  let got = 0;
+  for (const w of words) if (isWordMastered(w)) got++;
+  return `${got}/${words.length} 🏅`;
+}
+function makeWordChip(w) {
+  const n = state.wmastery[w] || 0;
+  const attempted = n > 0 || (state.wstars[w] || 0) > 0;
+  const chip = document.createElement('button');
+  chip.className = 'chip word ' + (isWordMastered(w) ? 'mastered' : attempted ? 'needs' : 'fresh');
+  const dots = isWordMastered(w) ? '⭐' : '●'.repeat(Math.min(n, MASTERY_NEED)) + '○'.repeat(Math.max(0, MASTERY_NEED - n));
+  chip.innerHTML = `<span class="chip-char">${w}</span><span class="chip-dots">${dots}</span>`;
+  chip.addEventListener('click', (e) => { e.stopPropagation(); ensureAudio(); startWord(w); });
   return chip;
 }
 
@@ -658,20 +785,85 @@ function renderPicker(title, items, onPick) {
   wrap.innerHTML = '';
   items.forEach(it => {
     const card = document.createElement('div');
-    card.className = 'lesson-card';
+    card.className = 'lesson-card' + (it.words ? ' word-card' : '');
     const head = document.createElement('button');
     head.className = 'lesson-btn';
-    head.innerHTML = `<span class="lesson-emoji">${it.emoji}</span><span>${it.title || it.rule}</span><span class="lesson-stars">${masteryLabel(it.chars)}</span>`;
+    const label = it.words ? wordMasteryLabel(it.words) : masteryLabel(it.chars);
+    head.innerHTML = `<span class="lesson-emoji">${it.emoji}</span><span>${it.title || it.rule}</span><span class="lesson-stars">${label}</span>`;
     head.addEventListener('click', () => { ensureAudio(); returnTo = null; onPick(it); });
     card.appendChild(head);
     const row = document.createElement('div');
     row.className = 'chip-row';
-    it.chars.forEach((_, idx) => row.appendChild(makeChip(it, idx, startSingle)));
+    if (it.words) it.words.forEach(w => row.appendChild(makeWordChip(w)));
+    else it.chars.forEach((_, idx) => row.appendChild(makeChip(it, idx, startSingle)));
     card.appendChild(row);
     wrap.appendChild(card);
   });
   syncCoins();
   show('lessonPick');
+}
+
+// 写生字选择页：课文 + 对应词语组（按教材顺序插入）
+function lessonPickerItems() {
+  const items = [];
+  for (const l of LESSONS) {
+    items.push(l);
+    const g = WORD_GROUPS.find(g => g.after === l.id);
+    if (g) items.push(g);
+  }
+  return items;
+}
+
+// ---------- 写词语 ----------
+
+let wordRun = null;      // 当前词语的累计 {w, mistakes, hints}
+let wordNextPrefix = ''; // 词语中间字的夸奖，并入下一字开场白
+
+function wordItems(w) {
+  const cs = [...w];
+  return cs.map((c, i) => ({
+    c, word: w,
+    wseq: { w, i, n: cs.length },
+    watch: WATCH_ONLY.has(c),
+  }));
+}
+
+// 点词语片：练这一个词，练完回选择页
+function startWord(w) {
+  mode = 'word';
+  currentLesson = null;
+  returnTo = 'picker';
+  queue = wordItems(w);
+  qi = 0; sessionCoins = 0;
+  show('practice');
+  startItem();
+}
+
+// 点组标题：练这组里还没掌握的词（最多 4 个，约 10 分钟）
+function startWordGroup(group) {
+  const todo = group.words.filter(w => !isWordMastered(w));
+  const pick = (todo.length ? todo : group.words).slice(0, 4);
+  mode = 'word';
+  currentLesson = null;
+  returnTo = null;
+  queue = pick.flatMap(wordItems);
+  qi = 0; sessionCoins = 0;
+  show('practice');
+  startItem();
+}
+
+// 只认不写的字：演示一遍，自动继续
+function watchAndAdvance(item) {
+  speak(`${item.c}，${item.wseq ? item.wseq.w + '的' : ''}${item.c}。这个字笔画太多，先认识就好——看一看！`);
+  writer.animateCharacter({ onComplete: () => {
+    showFeedback(`认识${item.c}就好，不用写！`, false, 2400);
+    setTimeout(() => {
+      qi++;
+      if (qi < queue.length) startItem();
+      else if (returnTo === 'picker' && lastPicker) renderPicker(lastPicker.title, lastPicker.items, lastPicker.onPick);
+      else endSession();
+    }, 1600);
+  } });
 }
 
 // 单字练习：点字片直达，练完回选择页
@@ -716,7 +908,7 @@ function startLesson(lesson) {
 function startDictation() {
   const pool = [];
   for (const l of LESSONS) for (const [c, word] of l.chars) {
-    if ((state.stars[c] || 0) >= 2) pool.push({ c, word });
+    if (!WATCH_ONLY.has(c) && (state.stars[c] || 0) >= 2) pool.push({ c, word });
   }
   if (pool.length < 3) {
     speak('先去写生字，攒够星星再来挑战吧！');
@@ -730,7 +922,16 @@ function startDictation() {
     const j = Math.floor(Math.random() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
-  queue = pool.slice(0, 8);
+  queue = pool.slice(0, 6);
+  // 默写词语（产出阶梯：先抄写练熟，再进听写）：
+  // 抄写≥2次的词语里随机抽 2 个，整词接在后面（含只认不写字的词不默）
+  const wReady = WORD_GROUPS.flatMap(g => g.words).filter(w =>
+    !([...w].some(c => WATCH_ONLY.has(c))) && (state.wstars[w] || 0) >= 2);
+  for (let i = wReady.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [wReady[i], wReady[j]] = [wReady[j], wReady[i]];
+  }
+  wReady.slice(0, 2).forEach(w => queue.push(...wordItems(w)));
   qi = 0; sessionCoins = 0;
   show('practice');
   startItem();
@@ -742,7 +943,7 @@ function renderShelf() {
   const wrap = $('stickerShelf');
   wrap.innerHTML = '';
   for (const l of LESSONS) {
-    const done = l.chars.every(([c]) => (state.stars[c] || 0) >= 2);
+    const done = l.chars.every(([c]) => WATCH_ONLY.has(c) || (state.stars[c] || 0) >= 2);
     const s = document.createElement('span');
     s.textContent = l.emoji;
     if (!done) s.className = 'sticker-locked';
@@ -780,7 +981,7 @@ document.querySelectorAll('.mode-card').forEach(card => {
     ensureAudio();
     const m = card.dataset.mode;
     if (m === 'strokes') renderPicker('选一个写字秘诀', RULES, startRule);
-    else if (m === 'lesson') renderPicker('选一课来写', LESSONS, startLesson);
+    else if (m === 'lesson') renderPicker('选一课来写', lessonPickerItems(), (it) => it.words ? startWordGroup(it) : startLesson(it));
     else startDictation();
   });
 });
@@ -827,7 +1028,8 @@ $('hintBtn').addEventListener('click', () => {
 $('speakBtn').addEventListener('click', () => {
   ensureAudio();
   const item = queue[qi];
-  speak(`请写：${item.c}。${item.word}的${item.c}。`);
+  if (item.wseq) speak(`请写词语：${item.wseq.w}。现在写第${item.wseq.i + 1}个字。`);
+  else speak(`请写：${item.c}。${item.word}的${item.c}。`);
 });
 
 $('muteBtn').addEventListener('click', () => {
@@ -846,7 +1048,7 @@ document.querySelector('.title').addEventListener('click', () => {
   if (titleTaps.length >= 3) {
     titleTaps = [];
     if (confirm('清空所有金币和星星，重新开始？')) {
-      state = { coins: 0, stars: {}, mastery: {}, muted: state.muted };
+      state = { coins: 0, stars: {}, mastery: {}, wmastery: {}, wstars: {}, muted: state.muted };
       store.save(state);
       syncCoins();
       renderShelf();
