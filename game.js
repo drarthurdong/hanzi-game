@@ -109,10 +109,10 @@ const MNEMONICS = {
   '排': '提手旁加非，用手排好队',
   '成': '斜钩像大旗立起来，事情做成了',
   '人': '一撇一捺，两条腿站稳的人',
-  '白': '日字头上一撇，太阳一出天就白',
-  '鸡': '又加鸟，鸡也是鸟',
+  '白': '白天有个太阳——日字加一撇就是白',
+  '鸡': '这又是一只鸟，哈哈——又加鸟就是鸡',
   '黑': '下面四点像火苗，被火熏黑了',
-  '蛋': '上面是疋下面是虫，蛋壳里藏着小生命',
+  '蛋': '蛋壳里有个小虫子，一个小生命要出来啦',
   '公': '八字头下面一个厶，公鸡的公',
   '做': '单人旁，人在做事情',
   '习': '像小鸟的一只翅膀，天天练习飞',
@@ -135,6 +135,116 @@ const CHAR_HINTS = {
 };
 
 const PRAISE = ['真棒！', '太好了！', '好厉害！', '写得真好！', '你做到了！'];
+
+// ---------- 部件（组件优先教学，2026-11-14）----------
+// 每字按书写顺序列部件 [名称, 笔画数, key]；key=1 的部件红色高亮（可迁移的积木块）。
+// 只收部件笔画连续的字（全包围如"因"、笔顺交叉如"里"不收）。
+// 笔画总数运行时与字库数据校验，不符则整字自动放弃部件功能，绝不错标。
+const COMPONENTS = {
+  '好': [['女',3,1],['子',3]],
+  '名': [['夕',3],['口',3,1]],
+  '多': [['夕',3,1],['夕',3]],
+  '牢': [['宝盖头',3],['牛',4,1]],
+  '记': [['言字旁',2,1],['己',3]],
+  '课': [['言字旁',2,1],['果',8]],
+  '调': [['言字旁',2,1],['周',8]],
+  '许': [['言字旁',2,1],['午',4]],
+  '球': [['王',4,1],['求',7]],
+  '朋': [['月',4,1],['月',4]],
+  '有': [['横撇',2],['月',4,1]],
+  '明': [['日',4,1],['月',4]],
+  '的': [['白',5,1],['勺',3]],
+  '笑': [['竹字头',6,1],['夭',4]],
+  '姥': [['女',3],['老',6,1]],
+  '指': [['提手旁',3,1],['旨',6]],
+  '把': [['提手旁',3,1],['巴',4]],
+  '排': [['提手旁',3,1],['非',8]],
+  '搬': [['提手旁',3,1],['舟',6],['殳',4]],
+  '拍': [['提手旁',3],['白',5,1]],
+  '你': [['单人旁',2,1],['尔',5]],
+  '们': [['单人旁',2],['门',3,1]],
+  '做': [['单人旁',2],['古',5,1],['反文旁',4]],
+  '吃': [['口',3,1],['乞',3]],
+  '哭': [['口',3,1],['口',3,1],['犬',4]],
+  '留': [['上半',5],['田',5,1]],
+  '变': [['上半',6],['又',2,1]],
+  '学': [['学字头',5],['子',3,1]],
+  '花': [['草字头',3,1],['化',4]],
+  '节': [['草字头',3,1],['下半',2]],
+  '蓝': [['草字头',3,1],['下半',10]],
+  '破': [['石',5,1],['皮',5]],
+  '坐': [['人',2],['人',2],['土',3,1]],
+  '在': [['上半',3],['土',3,1]],
+  '地': [['土',3,1],['也',3]],
+  '补': [['衣字旁',5,1],['卜',2]],
+  '孩': [['子',3,1],['亥',6]],
+  '脸': [['月',4,1],['右半',7]],
+  '甜': [['舌',6,1],['甘',5]],
+  '条': [['折文',3],['木',4,1]],
+  '游': [['三点水',3,1],['方',4],['右半',5]],
+  '洞': [['三点水',3,1],['同',6]],
+  '河': [['三点水',3,1],['可',5]],
+  '会': [['人',2,1],['云',4]],
+  '动': [['云',4],['力',2,1]],
+  '起': [['走',7,1],['己',3]],
+  '进': [['井',4],['走之底',3,1]],
+  '鸭': [['甲',5],['鸟',5,1]],
+  '鸡': [['又',2],['鸟',5,1]],
+  '蛋': [['疋',5],['虫',6,1]],
+  '路': [['足字旁',7,1],['各',6]],
+  '跑': [['足字旁',7,1],['包',5]],
+  '跳': [['足字旁',7,1],['兆',6]],
+  '轻': [['车',4,1],['右半',5]],
+  '狗': [['反犬旁',3,1],['句',5]],
+  '要': [['西字头',6],['女',3,1]],
+  '往': [['双人旁',3],['主',5,1]],
+  '舌': [['千',3],['口',3,1]],
+  '白': [['撇',1],['日',4,1]],
+  '粒': [['米',6,1],['立',5]],
+};
+
+const TAUGHT = new Set(LESSONS.flatMap(L => L.chars.map(([c]) => c)));
+
+function compParts(char) {
+  const def = COMPONENTS[char];
+  if (!def) return null;
+  let s = 0;
+  const parts = def.map(([name, n, key]) => {
+    const p = { name, start: s, end: s + n - 1, key: !!key,
+                known: name.length === 1 && TAUGHT.has(name) && name !== char };
+    s += n;
+    return p;
+  });
+  return { parts, total: s };
+}
+
+// 与字库数据校验后的部件（需要 charDataCache 已加载该字）
+function compValidated(char) {
+  const cp = compParts(char);
+  const d = charDataCache[char];
+  if (!cp || !d || !d.strokes) return null;
+  if (cp.total !== d.strokes.length) {
+    console.warn('部件笔画数与字库不符，放弃部件标注：', char, cp.total, d.strokes.length);
+    return null;
+  }
+  return cp;
+}
+
+// 红色高亮的笔画序号（无 key 部件或全字皆 key 时不上色）
+function keyStrokeIndices(char) {
+  const cp = compValidated(char);
+  if (!cp) return null;
+  const idx = [];
+  cp.parts.forEach(p => { if (p.key) { for (let i = p.start; i <= p.end; i++) idx.push(i); } });
+  if (!idx.length || idx.length >= cp.total) return null;
+  return idx;
+}
+
+function moduleOf(char, strokeIdx) {
+  const cp = compValidated(char);
+  if (!cp) return null;
+  return cp.parts.find(p => strokeIdx >= p.start && strokeIdx <= p.end) || null;
+}
 
 // ---------- 状态 ----------
 
@@ -283,7 +393,11 @@ function mistakeHint(item, strokeIdx, sd) {
   if (custom) return custom + '。';
   const desc = strokeDesc(item.c, strokeIdx);
   if (sd && sd.isBackwards && desc) return `方向反啦！这一笔是${desc.type}，要${desc.dir}。`;
-  let msg = item.rule ? `记住：${item.rule}。` : principleFor(item.c, strokeIdx);
+  // 部件优先：这一段其实是孩子会写的字
+  const part = moduleOf(item.c, strokeIdx);
+  let msg = '';
+  if (part && part.known) msg += `这一块就是${part.name}字，想想${part.name}怎么写。`;
+  msg += item.rule ? `记住：${item.rule}。` : principleFor(item.c, strokeIdx);
   if (desc) msg += `下一笔在${desc.pos}，是${desc.type}，${desc.dir}。`;
   return msg || '再试一次，你可以的！';
 }
@@ -380,10 +494,17 @@ function startItem() {
     delayBetweenStrokes: 180,
     highlightOnComplete: true,
     highlightColor: '#58b368',
+    radicalColor: '#d8432a',   // 关键部件红色（经 radStrokes 注入，见 loader）
     charDataLoader: (char, onComplete) => {
       fetch(`https://cdn.jsdelivr.net/npm/hanzi-writer-data@2/${char}.json`)
         .then(r => r.json())
-        .then(data => { charDataCache[char] = data; onComplete(data); })
+        .then(data => {
+          charDataCache[char] = data;
+          // 用我们的关键部件替换字典部首：红色 = 可迁移的积木块
+          const ki = keyStrokeIndices(char);
+          if (ki) data.radStrokes = ki; else delete data.radStrokes;
+          onComplete(data);
+        })
         .catch(() => $('loadError').classList.remove('hidden'));
     },
   });
@@ -394,6 +515,13 @@ function startItem() {
   } else {
     let intro = item.say || `${item.c}，${item.word}的${item.c}。`;
     if (!item.rule && MNEMONICS[item.c]) intro += `${MNEMONICS[item.c]}。`;
+    // 部件结构：把字介绍成积木
+    const cp = compParts(item.c);
+    if (cp && cp.parts.length > 1 && cp.parts.length <= 3) {
+      intro += `${item.c}是拼起来的：${cp.parts.map(p => p.name).join('，加')}。`;
+      const kk = cp.parts.find(p => p.key && p.known);
+      if (kk) intro += `红色的${kk.name}你已经学过啦！`;
+    }
     speak(intro + '看一看，怎么写。');
     writer.animateCharacter({ onComplete: () => setTimeout(() => beginQuiz(3), 350) });
   }
@@ -412,6 +540,15 @@ function beginQuiz(hintAfter) {
       sfx.good();
       floatCoin('+1 🪙');
       store.save(state);
+      // 部件边界提示：把长笔顺拆成孩子认识的模块
+      const part = moduleOf(queue[qi].c, strokesDone);
+      if (part && part.start === strokesDone && strokesDone > 0) {
+        const msg = part.known ? `现在写${part.name}——${part.name}你会写！`
+                               : `现在写${part.name}`;
+        showFeedback(msg, false, 2200);
+        const now = Date.now();
+        if (now - lastSpokenHintAt > 1800) { lastSpokenHintAt = now; speak(msg); }
+      }
     },
     onMistake: (sd) => {
       wrongOnStroke++;
@@ -453,7 +590,10 @@ function finishItem(totalMistakes) {
   $('celebrateStars').textContent = '⭐'.repeat(earned) + '☆'.repeat(3 - earned);
   $('celebrateChar').textContent = item.c;
   $('celebrateWord').textContent = item.word || item.rule || '';
-  $('celebrateMnemonic').textContent = mn || '';
+  const cpDone = compParts(item.c);
+  const structure = (cpDone && cpDone.parts.length > 1)
+    ? `🧩 ${cpDone.parts.map(p => p.name).join(' ＋ ')} ＝ ${item.c}` : '';
+  $('celebrateMnemonic').textContent = structure ? `${structure}${mn ? '　' + mn : ''}` : (mn || '');
   $('celebrateCoins').textContent = `+${bonus} 🪙 奖励！`;
   $('celebrate').classList.remove('hidden');
 }
