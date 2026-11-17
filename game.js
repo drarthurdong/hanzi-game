@@ -58,6 +58,80 @@ const WORD_GROUPS = [
 // 只认不写（D-006 选择性跳过）：词语里遇到时演示代替书写
 const WATCH_ONLY = new Set(['黑']);
 
+// ---------- 组字地图（hierarchy_draft.md Phase B）----------
+// 每个家族：锚点部件 + 组字链。链上每一步 = 已会的部分 + 一小块新东西。
+// 链条顺序即建议学习顺序：前一个字未掌握时，后面的字半透明（引导，不强制锁）。
+const FAMILIES = [
+  { anchor: '口', hint: '圆圆的大嘴巴', chains: [
+      ['口','中','虫','蛋'],
+      ['口','名','同','石','舌'],
+      ['口','吃','哭','甜'],
+  ]},
+  { anchor: '日', hint: '圆圆的太阳', chains: [
+      ['日','白','的'],
+      ['日','月','明'],
+      ['日','是'],
+  ]},
+  { anchor: '月', hint: '弯弯的月芽', chains: [
+      ['月','朋','有','脸'],
+  ]},
+  { anchor: '人', hint: '两条腿站稳', chains: [
+      ['人','个','两'],
+      ['人','从'],
+      ['人','你','们','做'],
+  ]},
+  { anchor: '女', hint: '🏠 家里先学', chains: [
+      ['女','好','姥'],
+      ['女','要'],
+  ]},
+  { anchor: '木', hint: '一棵树', chains: [
+      ['木','林','森'],
+  ]},
+  { anchor: '鸟', hint: '一点是眼睛', chains: [
+      ['鸟','鸡','鸭','鹅'],
+  ]},
+  { anchor: '水', hint: '中间竖钩像小河', chains: [
+      ['水','河','游','洞'],
+  ]},
+  { anchor: '土', hint: '🏠 家里先学', chains: [
+      ['土','地','在','坐'],
+  ]},
+  { anchor: '手', hint: '像张开的手掌', chains: [
+      ['手','指','把','拍'],
+      ['手','排','搬'],
+  ]},
+  { anchor: '足', title: '足 · 脚的家族', hint: '路跳跑都用脚', chains: [
+      ['足','路','跑','跳'],
+      ['走','起'],
+  ]},
+  { anchor: '记', title: '言字旁 讠 家族', hint: '说话的字都带它', chains: [
+      ['记','课','许','调'],
+  ]},
+  { anchor: '花', title: '草字头 艹 家族', hint: '和植物有关', chains: [
+      ['花','节','蓝'],
+  ]},
+  { anchor: '米', hint: '一粒米四面溅开', chains: [
+      ['米','粒'],
+  ]},
+  { anchor: '门', hint: '🏠 家里先学', chains: [
+      ['门','们'],
+  ]},
+  { anchor: '王', hint: '🏠 家里先学', chains: [
+      ['王','球'],
+  ]},
+];
+
+// 地图上有、课文里没有的字（家庭补教锚点等）的组词
+const MAP_WORDS = {
+  '女': '女孩', '土': '土地', '门': '大门', '王': '国王', '足': '足球',
+  '月': '月亮', '从': '跟从', '林': '树林', '森': '森林', '鹅': '大白鹅',
+};
+
+function charWordFor(c) {
+  for (const l of LESSONS) for (const [ch, word] of l.chars) if (ch === c) return word;
+  return MAP_WORDS[c] || '';
+}
+
 // 字形记忆口诀（听写提示 + 演示时讲解）。逐步补充。
 const MNEMONICS = {
   '明': '日加月，太阳和月亮在一起，天就亮啦',
@@ -136,6 +210,16 @@ const MNEMONICS = {
   '因': '大口框里一个大，原因包在里面',
   '为': '一点一撇加斜钩，为你做事的为',
   '粒': '米字旁加立，一粒一粒的米站起来',
+  '从': '两个人，一个跟着一个走',
+  '林': '两棵树并排站，就是树林',
+  '森': '三棵树叠起来，好多好多树',
+  '鹅': '我加鸟——我才是真正的鸟',
+  '月': '弯弯的月芽挂天上',
+  '女': '像一位叉腰站着的妈妈',
+  '土': '地面上堆起一堆土',
+  '门': '两扇打开的大门',
+  '足': '上面一个口，下面是迈开的脚',
+  '王': '三横一竖，坐得正正的大王',
 };
 
 // 特定字特定笔画的手写提示（优先于自动提示）。key = 字，value = {笔画序号: 提示}
@@ -216,6 +300,10 @@ const COMPONENTS = {
   '舌': [['千',3],['口',3,1]],
   '白': [['撇',1],['日',4,1]],
   '粒': [['米',6,1],['立',5]],
+  '从': [['人',2],['人',2,1]],
+  '林': [['木',4],['木',4,1]],
+  '森': [['木',4,1],['木',4],['木',4]],
+  '鹅': [['我',7],['鸟',5,1]],
 };
 
 const TAUGHT = new Set(LESSONS.flatMap(L => L.chars.map(([c]) => c)));
@@ -681,6 +769,13 @@ function finishItem(totalMistakes) {
   $('celebrate').classList.remove('hidden');
 }
 
+// 回到上一个选择页（课文选择页或组字地图）
+function restorePicker() {
+  if (!lastPicker) return goHome();
+  if (lastPicker.render) lastPicker.render();
+  else renderPicker(lastPicker.title, lastPicker.items, lastPicker.onPick);
+}
+
 function nextItem() {
   $('celebrate').classList.add('hidden');
   qi++;
@@ -689,7 +784,7 @@ function nextItem() {
   } else if (returnTo === 'picker' && lastPicker) {
     // 单字练习完成：直接回到选择页（可见更新后的掌握度）
     if (writer) { try { writer.cancelQuiz(); } catch {} writer = null; }
-    renderPicker(lastPicker.title, lastPicker.items, lastPicker.onPick);
+    restorePicker();
   } else {
     endSession();
   }
@@ -803,6 +898,91 @@ function renderPicker(title, items, onPick) {
   show('lessonPick');
 }
 
+// ---------- 组字地图渲染 ----------
+
+function makeMapChip(c, dim, isAnchor) {
+  const n = state.mastery[c] || 0;
+  const attempted = n > 0 || (state.stars[c] || 0) > 0;
+  const chip = document.createElement('button');
+  chip.className = 'chip ' + (isMastered(c) ? 'mastered' : attempted ? 'needs' : 'fresh')
+    + (dim ? ' dim' : '') + (isAnchor ? ' anchor' : '');
+  const home = !TAUGHT.has(c) && !attempted;
+  const dots = isMastered(c) ? '⭐' : home ? '🏠'
+    : '●'.repeat(Math.min(n, MASTERY_NEED)) + '○'.repeat(Math.max(0, MASTERY_NEED - n));
+  chip.innerHTML = `<span class="chip-char">${c}</span><span class="chip-dots">${dots}</span>`;
+  renderMiniChar(chip.querySelector('.chip-char'), c);
+  chip.addEventListener('click', (e) => { e.stopPropagation(); ensureAudio(); startMapChar(c); });
+  return chip;
+}
+
+function renderMap() {
+  lastPicker = { render: renderMap };
+  $('pickTitle').textContent = '组字地图 · 一块一块搭起来';
+  const wrap = $('lessonList');
+  wrap.innerHTML = '';
+  FAMILIES.forEach(f => {
+    const card = document.createElement('div');
+    card.className = 'lesson-card map-card';
+    const all = [...new Set(f.chains.flat())];
+    let got = 0;
+    for (const c of all) if (isMastered(c)) got++;
+    const head = document.createElement('button');
+    head.className = 'lesson-btn';
+    head.innerHTML = `<span class="lesson-emoji">🧩</span>`
+      + `<span>${f.title || f.anchor + ' 家族'}<span class="map-hint">${f.hint || ''}</span></span>`
+      + `<span class="lesson-stars">${got}/${all.length} 🏅</span>`;
+    head.addEventListener('click', () => { ensureAudio(); startFamily(f); });
+    card.appendChild(head);
+    f.chains.forEach(chain => {
+      const row = document.createElement('div');
+      row.className = 'chip-row chain-row';
+      chain.forEach((c, i) => {
+        if (i > 0) {
+          const a = document.createElement('span');
+          a.className = 'chain-arrow';
+          a.textContent = '➜';
+          row.appendChild(a);
+        }
+        const dim = i > 0 && !isMastered(chain[i - 1]);
+        row.appendChild(makeMapChip(c, dim, i === 0 && c === f.anchor));
+      });
+      card.appendChild(row);
+    });
+    wrap.appendChild(card);
+  });
+  syncCoins();
+  show('lessonPick');
+}
+
+// 点地图上的字：单字练习，练完回地图
+function startMapChar(c) {
+  mode = 'lesson';
+  currentLesson = null;
+  returnTo = 'picker';
+  queue = [{ c, word: charWordFor(c) }];
+  qi = 0; sessionCoins = 0;
+  show('practice');
+  startItem();
+}
+
+// 点家族标题：沿链条顺序练还没掌握的字（最多 5 个）
+function startFamily(f) {
+  const seen = new Set();
+  const ordered = [];
+  for (const chain of f.chains) for (const c of chain) {
+    if (!seen.has(c)) { seen.add(c); ordered.push(c); }
+  }
+  const todo = ordered.filter(c => !isMastered(c));
+  const pick = (todo.length ? todo : ordered).slice(0, 5);
+  mode = 'lesson';
+  currentLesson = null;
+  returnTo = 'picker';
+  queue = pick.map(c => ({ c, word: charWordFor(c) }));
+  qi = 0; sessionCoins = 0;
+  show('practice');
+  startItem();
+}
+
 // 写生字选择页：课文 + 对应词语组（按教材顺序插入）
 function lessonPickerItems() {
   const items = [];
@@ -860,7 +1040,7 @@ function watchAndAdvance(item) {
     setTimeout(() => {
       qi++;
       if (qi < queue.length) startItem();
-      else if (returnTo === 'picker' && lastPicker) renderPicker(lastPicker.title, lastPicker.items, lastPicker.onPick);
+      else if (returnTo === 'picker' && lastPicker) restorePicker();
       else endSession();
     }, 1600);
   } });
@@ -968,7 +1148,7 @@ function backFromPractice() {
   if (returnTo === 'picker' && lastPicker) {
     if (writer) { try { writer.cancelQuiz(); } catch {} writer = null; }
     speechSynthesis && speechSynthesis.cancel();
-    renderPicker(lastPicker.title, lastPicker.items, lastPicker.onPick);
+    restorePicker();
   } else {
     goHome();
   }
@@ -982,6 +1162,7 @@ document.querySelectorAll('.mode-card').forEach(card => {
     const m = card.dataset.mode;
     if (m === 'strokes') renderPicker('选一个写字秘诀', RULES, startRule);
     else if (m === 'lesson') renderPicker('选一课来写', lessonPickerItems(), (it) => it.words ? startWordGroup(it) : startLesson(it));
+    else if (m === 'map') renderMap();
     else startDictation();
   });
 });
