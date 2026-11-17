@@ -53,10 +53,14 @@ const WORD_GROUPS = [
     words: ['我们','兔子','生日','舌头','心跳','来往','成人','儿子','排球','蓝天'] },
   { id: 'w4', after: 19, emoji: '📝', title: '写词语 · 第18—19课',
     words: ['黑白','鸟蛋','公鸡','米粒','因为','学习'] },
+  // 第14周复习周（11/16-20）听写词中的新组合（旧字新词，Wk14 作业单）
+  { id: 'w5', after: 19, emoji: '🔄', title: '写词语 · 第14周复习',
+    words: ['上下','友好','搬进','山洞','飞鸟','鸡蛋','天地','甜瓜'] },
 ];
 
-// 只认不写（D-006 选择性跳过）：词语里遇到时演示代替书写
-const WATCH_ONLY = new Set(['黑']);
+// 只认不写（D-006 选择性跳过）：词语里遇到时演示代替书写。
+// 黑 = 爸爸 L18 决定；搬 = 爸爸点名的"反效果字"例子（13画，待爸爸确认）
+const WATCH_ONLY = new Set(['黑', '搬']);
 
 // ---------- 组字地图（hierarchy_draft.md Phase B）----------
 // 每个家族：锚点部件 + 组字链。链上每一步 = 已会的部分 + 一小块新东西。
@@ -988,8 +992,7 @@ function lessonPickerItems() {
   const items = [];
   for (const l of LESSONS) {
     items.push(l);
-    const g = WORD_GROUPS.find(g => g.after === l.id);
-    if (g) items.push(g);
+    WORD_GROUPS.filter(g => g.after === l.id).forEach(g => items.push(g));
   }
   return items;
 }
