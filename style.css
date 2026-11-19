@@ -73,7 +73,14 @@ html, body {
 
 /* 组字地图 */
 .chain-row { align-items: center; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
-.chain-arrow { color: #d8a35a; font-size: 18px; font-weight: 700; }
+.chain-arrow { color: #d8a35a; font-size: 18px; font-weight: 700; width: 20px; text-align: center; flex: none; }
+.ghost { visibility: hidden; }
+.chip.ghost { cursor: default; }
+.more-row { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #eadfce; }
+.more-row.no-line { border-top: none; margin-top: 6px; padding-top: 0; }
+.more-label { color: #b5894e; font-size: 18px; font-weight: 700; min-width: 44px; text-align: center; flex: none; }
+.more-label.via { background: #f3ead9; border-radius: 10px; padding: 6px 8px; font-size: 20px; }
+.chain-sep { color: #c9b8a4; font-size: 18px; font-weight: 700; flex: none; }
 .chip.dim { opacity: .42; }
 .chip.anchor { width: 62px; height: 68px; border-color: #d8a35a; background: #fdf6ea; }
 .chip.anchor .chip-svg { width: 40px; height: 40px; }
